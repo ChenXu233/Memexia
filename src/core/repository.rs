@@ -16,9 +16,10 @@ impl Repository {
         let root = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         #[cfg(windows)]
         let root = {
-            let p = root.to_string_lossy().to_string();
-            if p.starts_with("\\\\?\\") {
-                PathBuf::from(&p[4..])
+            let p = root.to_string_lossy();
+            // 移除 Windows 长路径前缀 \\?\
+            if let Some(without_prefix) = p.strip_prefix("\\\\?\\") {
+                PathBuf::from(without_prefix)
             } else {
                 root
             }
@@ -27,9 +28,9 @@ impl Repository {
         if root.join(".memexia").exists() {
             anyhow::bail!("Repository already exists at {:?}", root);
         }
-        
+
         let storage = Storage::init(&root)?;
-        
+
         Ok(Self {
             root,
             storage,
@@ -37,23 +38,38 @@ impl Repository {
     }
 
     pub fn open(path: &Path) -> Result<Self> {
-        let root = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        let mut current = Some(fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()));
+
         #[cfg(windows)]
-        let root = {
-            let p = root.to_string_lossy().to_string();
-            if p.starts_with("\\\\?\\") {
-                PathBuf::from(&p[4..])
-            } else {
-                root
+        {
+            // 规范化 Windows 路径，移除 \\?\ 前缀
+            if let Some(ref mut p) = current {
+                let p_str = p.to_string_lossy();
+                if let Some(without_prefix) = p_str.strip_prefix("\\\\?\\") {
+                    *p = PathBuf::from(without_prefix);
+                }
             }
+        }
+
+        // 向上查找 .memexia 目录
+        let mut found_root: Option<PathBuf> = None;
+        while let Some(path) = current {
+            if path.join(".memexia").exists() {
+                found_root = Some(path);
+                break;
+            }
+            current = path.parent().map(|p| p.to_path_buf());
+        }
+
+        let root = match found_root {
+            Some(r) => r,
+            None => anyhow::bail!(
+                "Not a Memexia repository (or any of the parent directories): .memexia"
+            ),
         };
 
-        if !root.join(".memexia").exists() {
-            anyhow::bail!("Not a Memexia repository (or any of the parent directories): .memexia");
-        }
-        
         let storage = Storage::open(&root)?;
-        
+
         Ok(Self {
             root,
             storage,
