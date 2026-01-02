@@ -1,10 +1,9 @@
-﻿use anyhow::{Context, Result};
+use anyhow::{Context, Result};
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::io::Write;
-use crate::storage::Storage;
+use crate::storage::{Storage, Node, NodeType, Edge, RelationType};
 use crate::core::{object, parser};
-use oxigraph::model::*;
 
 pub struct Repository {
     root: PathBuf,
@@ -76,6 +75,15 @@ impl Repository {
         })
     }
 
+    /// 获取存储后端
+    ///
+    /// # Returns
+    ///
+    /// 存储后端引用
+    pub fn storage(&self) -> &Storage {
+        &self.storage
+    }
+
     pub fn add(&self, files: &[PathBuf]) -> Result<()> {
         let index_path = self.root.join(".memexia/index");
         let mut index = if index_path.exists() {
@@ -90,7 +98,7 @@ impl Repository {
             // Make path relative to root
             let rel_path = pathdiff::diff_paths(&abs_path, &self.root)
                 .context("File is outside repository")?;
-            
+
             let path_str = rel_path.to_string_lossy().to_string();
             if !index.contains(&path_str) {
                 index.push(path_str);
@@ -101,7 +109,7 @@ impl Repository {
         for line in index {
             writeln!(file, "{}", line)?;
         }
-        
+
         Ok(())
     }
 
@@ -110,12 +118,12 @@ impl Repository {
         if !index_path.exists() {
             return Ok("No changes staged.".to_string());
         }
-        
+
         let content = fs::read_to_string(index_path)?;
         if content.is_empty() {
             return Ok("No changes staged.".to_string());
         }
-        
+
         Ok(format!("Staged files:\n{}", content))
     }
 
@@ -124,108 +132,63 @@ impl Repository {
         if !index_path.exists() {
             anyhow::bail!("Nothing to commit");
         }
-        
+
         let content = fs::read_to_string(&index_path)?;
         if content.is_empty() {
             anyhow::bail!("Nothing to commit");
         }
-        
+
         let index: Vec<String> = content.lines().map(|s| s.to_string()).collect();
-        let graph = self.storage.get_graph();
 
         for path_str in index {
             let path = self.root.join(&path_str);
             if !path.exists() {
-                continue; 
+                continue;
             }
-            
-            let content = fs::read(&path)?;
-            let hash = object::write_object(&self.root, &content)?;
-            
-            let content_str = String::from_utf8_lossy(&content);
-            let parsed = parser::parse_content(&content_str);
-            
-            // Update Graph
-            // Use a simple URI scheme: urn:memexia:file:<path> relative to repo root
-            let subject_uri = format!("urn:memexia:file:{}", path_str.replace("\\", "/"));
-            let subject = NamedNode::new(subject_uri)?;
-            
-            println!("Inserting triples for {}", path_str);
 
-            // Add title
-            if let Some(title) = parsed.title {
-                graph.insert(&Quad::new(
-                    subject.clone(),
-                    NamedNode::new("http://purl.org/dc/elements/1.1/title")?,
-                    Literal::new_simple_literal(title),
-                    GraphName::DefaultGraph
-                ))?;
+            let file_content = fs::read(&path)?;
+            let _hash = object::write_object(&self.root, &file_content)?;
+
+            let content_str = String::from_utf8_lossy(&file_content);
+            let parsed = parser::parse_markdown(&content_str, &path_str);
+
+            // Create node in graph
+            let node = parsed.to_node();
+            self.storage.graph().add_node(&node)?;
+
+            // Create edges for links
+            for link in &parsed.wiki_links {
+                let target_id = format!("urn:memexia:file:{}", link.target.replace(" ", "_"));
+
+                // Check if target node exists, if not create it
+                if !self.storage.graph().node_exists(&target_id)? {
+                    let target_node = Node::new(&target_id, NodeType::Concept, &link.target);
+                    self.storage.graph().add_node(&target_node)?;
+                }
+
+                let edge = link.to_edge(&node.id);
+                self.storage.graph().add_edge(&edge)?;
             }
-            
-            // Add links
-            for link in parsed.links {
-                // Normalize link to a potential file URI
-                let target_uri = format!("urn:memexia:file:{}.md", link.replace(" ", "_"));
-                let target = NamedNode::new(target_uri)?;
-                graph.insert(&Quad::new(
-                    subject.clone(),
-                    NamedNode::new("http://memexia.org/schema/linksTo")?,
-                    target,
-                    GraphName::DefaultGraph
-                ))?;
-            }
-            
-            // Add tags
-            for tag in parsed.tags {
-                graph.insert(&Quad::new(
-                    subject.clone(),
-                    NamedNode::new("http://memexia.org/schema/hasTag")?,
-                    Literal::new_simple_literal(tag),
-                    GraphName::DefaultGraph
-                ))?;
-            }
-            
-            // Add content hash
-             graph.insert(&Quad::new(
-                subject.clone(),
-                NamedNode::new("http://memexia.org/schema/contentHash")?,
-                Literal::new_simple_literal(hash),
-                GraphName::DefaultGraph
-            ))?;
         }
-        
+
         println!("Committed with message: {}", message);
-        
+
         // Clear index
         fs::File::create(index_path)?;
-        
+
         Ok(())
     }
 
-    pub fn query_graph(&self, query: &str) -> Result<Vec<String>> {
-        use oxigraph::sparql::QueryResults;
-        
-        let store = self.storage.get_graph();
-        let results = store.query(query)?;
-        
+    pub fn query_graph(&self, _query: &str) -> Result<Vec<String>> {
+        // SPARQL 查询暂不支持内存存储
+        // 返回所有节点作为结果
+        let nodes = self.storage.graph().list_nodes()?;
         let mut rows = Vec::new();
-        if let QueryResults::Solutions(solutions) = results {
-            for solution in solutions {
-                let solution = solution?;
-                let row = solution.iter()
-                    .map(|(var, val)| format!("{} = {}", var, val))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                rows.push(row);
-            }
-        } else if let QueryResults::Graph(triples) = results {
-             for triple in triples {
-                let triple = triple?;
-                rows.push(format!("{} {} {}", triple.subject, triple.predicate, triple.object));
-            }
+
+        for node in nodes {
+            rows.push(format!("Node: {} - {}", node.id, node.title));
         }
+
         Ok(rows)
     }
 }
-
-

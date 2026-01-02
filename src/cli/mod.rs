@@ -56,3 +56,13 @@ pub struct ConfigArgs {
     /// Value to set
     pub value: Option<String>,
 }
+
+#[derive(Args)]
+pub struct ReindexArgs {
+    /// Full reindex (delete all and rebuild)
+    #[arg(short, long)]
+    pub full: bool,
+    /// Path to reindex (defaults to current directory)
+    #[arg(default_value = ".")]
+    pub path: std::path::PathBuf,
+}

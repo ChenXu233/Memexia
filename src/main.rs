@@ -27,6 +27,7 @@ fn main() -> anyhow::Result<()> {
         Commands::Sync(args) => cli::commands::sync(args),
         Commands::Serve(args) => cli::commands::serve(args),
         Commands::Config(args) => cli::commands::config(args),
+        Commands::Reindex(args) => cli::commands::reindex(args),
     }
 }
 
@@ -71,4 +72,7 @@ enum Commands {
     
     /// Manage configuration
     Config(cli::ConfigArgs),
+
+    /// Reindex all files in the repository
+    Reindex(cli::ReindexArgs),
 }

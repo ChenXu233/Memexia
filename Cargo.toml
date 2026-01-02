@@ -15,7 +15,7 @@ anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = "0.3"
-oxigraph = {version = "0.5.3"}
+oxigraph = "0.5.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1.35", features = ["full"] }
@@ -29,3 +29,8 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 pathdiff = "0.2.3"
 pulldown-cmark = "0.13.0"
 regex = "1.10"
+yaml-rust2 = "0.9"
+notify = "6"
+
+[dev-dependencies]
+tempfile = "3.10"
