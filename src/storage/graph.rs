@@ -91,6 +91,13 @@ pub trait GraphStorage: Send + Sync {
     /// 所有节点的列表
     fn list_nodes(&self) -> Result<Vec<Node>>;
 
+    /// 获取所有节点
+    ///
+    /// # Returns
+    ///
+    /// 所有节点的列表
+    fn get_all_nodes(&self) -> Result<Vec<Node>>;
+
     /// 添加边
     ///
     /// # Arguments
@@ -129,6 +136,28 @@ pub trait GraphStorage: Send + Sync {
         direction: EdgeDirection,
     ) -> Result<Vec<Edge>>;
 
+    /// 获取从指定源节点出发的所有边
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - 源节点 ID
+    ///
+    /// # Returns
+    ///
+    /// 匹配的边列表
+    fn get_edges_by_source(&self, source: &str) -> Result<Vec<Edge>>;
+
+    /// 获取指向指定目标节点的所有边
+    ///
+    /// # Arguments
+    ///
+    /// * `target` - 目标节点 ID
+    ///
+    /// # Returns
+    ///
+    /// 匹配的边列表
+    fn get_edges_by_target(&self, target: &str) -> Result<Vec<Edge>>;
+
     /// 获取满足条件的边
     ///
     /// # Arguments
@@ -151,12 +180,30 @@ pub trait GraphStorage: Send + Sync {
     /// 操作结果
     fn delete_edge(&self, id: &str) -> Result<()>;
 
+    /// 移除边（删除边的别名）
+    ///
+    /// # Arguments
+    ///
+    /// * `id` - 要删除的边 ID
+    ///
+    /// # Returns
+    ///
+    /// 操作结果
+    fn remove_edge(&self, id: &str) -> Result<()>;
+
     /// 列出所有边
     ///
     /// # Returns
     ///
     /// 所有边的列表
     fn list_edges(&self) -> Result<Vec<Edge>>;
+
+    /// 获取所有边
+    ///
+    /// # Returns
+    ///
+    /// 所有边的列表
+    fn get_all_edges(&self) -> Result<Vec<Edge>>;
 
     /// 执行 SPARQL 查询
     ///
@@ -168,6 +215,17 @@ pub trait GraphStorage: Send + Sync {
     ///
     /// 查询结果
     fn query(&self, sparql: &str) -> Result<QueryResult>;
+
+    /// 执行 SPARQL 查询（别名方法）
+    ///
+    /// # Arguments
+    ///
+    /// * `sparql` - SPARQL 查询语句
+    ///
+    /// # Returns
+    ///
+    /// 查询结果（格式化的字符串列表）
+    fn sparql_query(&self, sparql: &str) -> Result<Vec<String>>;
 
     /// 检查节点是否存在
     ///
@@ -197,6 +255,18 @@ pub trait GraphStorage: Send + Sync {
     ///
     /// 统计信息
     fn get_stats(&self) -> Result<GraphStats>;
+
+    /// 查找两点间的路径
+    ///
+    /// # Arguments
+    ///
+    /// * `source` - 源节点 ID
+    /// * `target` - 目标节点 ID
+    ///
+    /// # Returns
+    ///
+    /// 路径节点列表（如果存在）
+    fn find_path(&self, source: &str, target: &str) -> Result<Option<Vec<String>>>;
 }
 
 /// 边的方向

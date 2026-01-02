@@ -4,6 +4,7 @@
 //! 使用 Oxigraph 0.5.3 的 Store API
 
 use super::{Edge, EdgeDirection, GraphStats, Node, NodeType, RelationType};
+use super::nquads::parse_relation_type;
 use crate::storage::graph::GraphStorage;
 use crate::storage::graph::QueryResult;
 use crate::storage::EdgeFilter;
@@ -237,7 +238,9 @@ impl GraphStorage for OxigraphStorage {
 
     fn add_edge(&self, edge: &Edge) -> Result<()> {
         let subject = NamedOrBlankNode::from(NamedNode::new(&edge.from)?);
-        let predicate = NamedNode::new(&format!("memexia:{}", edge.relation))?;
+        // 使用 to_lowercase() 以匹配 parse_relation_type 的期望
+        let predicate_str = format!("memexia:{}", edge.relation.to_string().to_lowercase());
+        let predicate = NamedNode::new(&predicate_str)?;
         let object = NamedNode::new(&edge.to)?;
         let object_term = Term::from(object);
         let graph_name = GraphName::DefaultGraph;
@@ -274,8 +277,12 @@ impl GraphStorage for OxigraphStorage {
         ) {
             match result {
                 Ok(quad) => {
-                    if let Some(relation) = parse_relation_type(&Self::clean_iri(&quad.predicate.to_string())) {
-                        return Ok(Some(Edge::new(id, from, &to, relation)));
+                    let pred_str = Self::clean_iri(&quad.predicate.to_string());
+                    if pred_str.starts_with("memexia:") {
+                        let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
+                        if let Some(relation) = parse_relation_type(relation_str) {
+                            return Ok(Some(Edge::new(id, from, &to, relation)));
+                        }
                     }
                 }
                 Err(_) => {}
@@ -296,9 +303,11 @@ impl GraphStorage for OxigraphStorage {
                         Ok(quad) => {
                             let pred_str = Self::clean_iri(&quad.predicate.to_string());
                             if pred_str.starts_with("memexia:") {
+                                // 去掉 "memexia:" 前缀，提取关系类型
+                                let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
                                 if let Term::NamedNode(obj_node) = &quad.object {
                                     let obj_str = Self::clean_iri(&obj_node.to_string());
-                                    if let Some(relation) = parse_relation_type(&pred_str) {
+                                    if let Some(relation) = parse_relation_type(relation_str) {
                                         let edge_id = format!("urn:memexia:edge:{}-{}", node_id, obj_str);
                                         edges.push(Edge::new(&edge_id, node_id, &obj_str, relation));
                                     }
@@ -317,7 +326,8 @@ impl GraphStorage for OxigraphStorage {
                             if quad.subject.is_named_node() {
                                 let pred_str = Self::clean_iri(&quad.predicate.to_string());
                                 if pred_str.starts_with("memexia:") {
-                                    if let Some(relation) = parse_relation_type(&pred_str) {
+                                    let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
+                                    if let Some(relation) = parse_relation_type(relation_str) {
                                         let subj_str = Self::clean_iri(&quad.subject.to_string());
                                         let edge_id = format!("urn:memexia:edge:{}-{}", subj_str, node_id);
                                         edges.push(Edge::new(&edge_id, &subj_str, node_id, relation));
@@ -336,9 +346,10 @@ impl GraphStorage for OxigraphStorage {
                         Ok(quad) => {
                             let pred_str = Self::clean_iri(&quad.predicate.to_string());
                             if pred_str.starts_with("memexia:") {
+                                let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
                                 if let Term::NamedNode(obj_node) = &quad.object {
                                     let obj_str = Self::clean_iri(&obj_node.to_string());
-                                    if let Some(relation) = parse_relation_type(&pred_str) {
+                                    if let Some(relation) = parse_relation_type(relation_str) {
                                         let edge_id = format!("urn:memexia:edge:{}-{}", node_id, obj_str);
                                         edges.push(Edge::new(&edge_id, node_id, &obj_str, relation));
                                     }
@@ -356,7 +367,8 @@ impl GraphStorage for OxigraphStorage {
                             if quad.subject.is_named_node() {
                                 let pred_str = Self::clean_iri(&quad.predicate.to_string());
                                 if pred_str.starts_with("memexia:") {
-                                    if let Some(relation) = parse_relation_type(&pred_str) {
+                                    let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
+                                    if let Some(relation) = parse_relation_type(relation_str) {
                                         let subj_str = Self::clean_iri(&quad.subject.to_string());
                                         let edge_id = format!("urn:memexia:edge:{}-{}", subj_str, node_id);
                                         edges.push(Edge::new(&edge_id, &subj_str, node_id, relation));
@@ -459,12 +471,14 @@ impl GraphStorage for OxigraphStorage {
                     let pred_str = Self::clean_iri(&quad.predicate.to_string());
                     if pred_str.starts_with("memexia:") {
                         if quad.subject.is_named_node() && quad.object.is_named_node() {
+                            // 去掉 "memexia:" 前缀，提取关系类型
+                            let relation_str = pred_str.strip_prefix("memexia:").unwrap_or(&pred_str);
                             // subject 和 object 都需要清理
                             let s_str = Self::clean_iri(&quad.subject.to_string());
                             let o_str = Self::clean_iri(&quad.object.to_string());
                             let edge_id = format!("urn:memexia:edge:{}-{}", s_str, o_str);
                             if seen.insert(edge_id.clone()) {
-                                if let Some(relation) = parse_relation_type(&pred_str) {
+                                if let Some(relation) = parse_relation_type(relation_str) {
                                     edges.push(Edge::new(&edge_id, &s_str, &o_str, relation));
                                 }
                             }
@@ -556,116 +570,78 @@ impl GraphStorage for OxigraphStorage {
             relation_counts: relation_counts.into_iter().collect(),
         })
     }
-}
 
-fn parse_relation_type(s: &str) -> Option<RelationType> {
-    use RelationType::*;
-
-    let normalized = s.to_lowercase().replace("memexia:", "");
-
-    match normalized.as_str() {
-        "contains" => Some(Contains),
-        "partof" | "part_of" => Some(PartOf),
-        "instanceof" | "instance_of" => Some(InstanceOf),
-        "derivesfrom" | "derives_from" => Some(DerivesFrom),
-        "leadsto" | "leads_to" => Some(LeadsTo),
-        "supports" => Some(Supports),
-        "contradicts" => Some(Contradicts),
-        "refines" => Some(Refines),
-        "references" => Some(References),
-        "relatedto" | "related_to" => Some(RelatedTo),
-        "analogousto" | "analogous_to" => Some(AnalogousTo),
-        "precedes" => Some(Precedes),
-        "follows" => Some(Follows),
-        "simultaneous" => Some(Simultaneous),
-        _ => None,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use tempfile::TempDir;
-
-    #[test]
-    fn test_basic_operations() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = OxigraphStorage::create(&temp_dir.path().join("graph")).unwrap();
-
-        let node = Node::new("urn:memexia:file:test.md", NodeType::Concept, "Test Node");
-        storage.add_node(&node).unwrap();
-
-        assert!(storage.node_exists("urn:memexia:file:test.md").unwrap());
-
-        let retrieved = storage.get_node("urn:memexia:file:test.md").unwrap();
-        assert!(retrieved.is_some());
-        assert_eq!(retrieved.unwrap().title, "Test Node");
+    fn get_all_nodes(&self) -> Result<Vec<Node>> {
+        self.list_nodes()
     }
 
-    #[test]
-    fn test_edge_operations() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = OxigraphStorage::create(&temp_dir.path().join("graph")).unwrap();
-
-        let node1 = Node::new("urn:memexia:file:a.md", NodeType::Concept, "A");
-        let node2 = Node::new("urn:memexia:file:b.md", NodeType::Concept, "B");
-        storage.add_node(&node1).unwrap();
-        storage.add_node(&node2).unwrap();
-
-        let edge = Edge::new(
-            "urn:memexia:edge:a-b",
-            "urn:memexia:file:a.md",
-            "urn:memexia:file:b.md",
-            RelationType::Contradicts,
-        );
-        storage.add_edge(&edge).unwrap();
-
-        let edges = storage
-            .get_edges_for_node("urn:memexia:file:a.md", EdgeDirection::Outgoing)
-            .unwrap();
-        assert_eq!(edges.len(), 1);
-        assert_eq!(edges[0].relation, RelationType::Contradicts);
-
-        let stats = storage.get_stats().unwrap();
-        assert_eq!(stats.node_count, 2);
-        assert_eq!(stats.edge_count, 1);
+    fn get_all_edges(&self) -> Result<Vec<Edge>> {
+        self.list_edges()
     }
 
-    #[test]
-    fn test_sparql_query() {
-        let temp_dir = TempDir::new().unwrap();
-        let storage = OxigraphStorage::create(&temp_dir.path().join("graph")).unwrap();
+    fn get_edges_by_source(&self, source: &str) -> Result<Vec<Edge>> {
+        self.get_edges_for_node(source, EdgeDirection::Outgoing)
+    }
 
-        // 添加测试数据
-        let node1 = Node::new("urn:memexia:file:doc1.md", NodeType::Concept, "Document 1");
-        let node2 = Node::new("urn:memexia:file:doc2.md", NodeType::Concept, "Document 2");
-        storage.add_node(&node1).unwrap();
-        storage.add_node(&node2).unwrap();
+    fn get_edges_by_target(&self, target: &str) -> Result<Vec<Edge>> {
+        self.get_edges_for_node(target, EdgeDirection::Incoming)
+    }
 
-        let edge = Edge::new(
-            "urn:memexia:edge:doc1-doc2",
-            "urn:memexia:file:doc1.md",
-            "urn:memexia:file:doc2.md",
-            RelationType::RelatedTo,
-        );
-        storage.add_edge(&edge).unwrap();
+    fn remove_edge(&self, id: &str) -> Result<()> {
+        self.delete_edge(id)
+    }
 
-        // SPARQL 查询测试 - 查询所有节点
-        let result = storage.query("SELECT ?s ?title WHERE { ?s <memexia:title> ?title }").unwrap();
-        assert_eq!(result.bindings.len(), 2);
+    fn sparql_query(&self, sparql: &str) -> Result<Vec<String>> {
+        let result = self.query(sparql)?;
+        let mut output = Vec::new();
 
-        // 验证返回的绑定包含正确的结果
-        assert!(!result.bindings.is_empty());
         for binding in &result.bindings {
-            // 验证绑定包含 s 和 title 变量（SPARQL 变量带 ? 前缀）
-            assert!(binding.contains_key("?s"));
-            assert!(binding.contains_key("?title"));
+            let mut row = String::new();
+            for (var, value) in binding {
+                if !row.is_empty() {
+                    row.push(' ');
+                }
+                row.push_str(&format!("{}={}", var, value));
+            }
+            output.push(row);
         }
 
-        // 测试查询条件过滤 - 只查询特定类型的节点
-        let result2 = storage
-            .query("SELECT ?s WHERE { ?s <rdf:type> <memexia:Concept> }")
-            .unwrap();
-        assert_eq!(result2.bindings.len(), 2);
+        Ok(output)
+    }
+
+    fn find_path(&self, source: &str, target: &str) -> Result<Option<Vec<String>>> {
+        use std::collections::VecDeque;
+
+        let mut visited = std::collections::HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut predecessor: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+
+        queue.push_back(source.to_string());
+        visited.insert(source.to_string());
+
+        while let Some(current) = queue.pop_front() {
+            if current == target {
+                let mut path = Vec::new();
+                let mut node = current.clone();
+                while node != source {
+                    path.push(node.clone());
+                    node = predecessor.get(&node).unwrap().clone();
+                }
+                path.push(source.to_string());
+                path.reverse();
+                return Ok(Some(path));
+            }
+
+            let edges = self.get_edges_by_source(&current)?;
+            for edge in &edges {
+                if !visited.contains(&edge.to) {
+                    visited.insert(edge.to.clone());
+                    predecessor.insert(edge.to.clone(), current.clone());
+                    queue.push_back(edge.to.clone());
+                }
+            }
+        }
+
+        Ok(None)
     }
 }

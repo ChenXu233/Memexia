@@ -84,6 +84,15 @@ impl Repository {
         &self.storage
     }
 
+    /// 获取仓库根路径
+    ///
+    /// # Returns
+    ///
+    /// 仓库根路径引用
+    pub fn path(&self) -> &Path {
+        &self.root
+    }
+
     pub fn add(&self, files: &[PathBuf]) -> Result<()> {
         let index_path = self.root.join(".memexia/index");
         let mut index = if index_path.exists() {

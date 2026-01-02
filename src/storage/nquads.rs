@@ -273,14 +273,15 @@ pub fn export_nquads(storage: &dyn GraphStorage, path: &Path) -> Result<File> {
     // 导出边
     let edges = storage.list_edges()?;
     for edge in edges {
-        let predicate = format!("memexia:{}", edge.relation);
+        // 使用 to_lowercase() 以匹配 parse_relation_type 的期望
+        let predicate = format!("memexia:{}", edge.relation.to_string().to_lowercase());
 
         let mut object = edge.to.clone();
         if edge.strength != 1.0 || edge.description.is_some() {
             object = format!(
                 "{}|{}:{}:{}",
                 edge.to,
-                edge.relation,
+                edge.relation.to_string().to_lowercase(),
                 edge.strength,
                 edge.description.as_deref().unwrap_or("")
             );
@@ -397,7 +398,7 @@ pub fn import_nquads(storage: &dyn GraphStorage, path: &Path) -> Result<()> {
 }
 
 /// 解析关系类型字符串
-fn parse_relation_type(s: &str) -> Option<RelationType> {
+pub(super) fn parse_relation_type(s: &str) -> Option<RelationType> {
     match s.to_lowercase().as_str() {
         "contains" => Some(RelationType::Contains),
         "partof" | "part_of" => Some(RelationType::PartOf),
@@ -516,7 +517,7 @@ mod tests {
         assert!(!content.is_empty());
         assert!(content.contains("memexia:Concept"));
         assert!(content.contains("memexia:title"));
-        assert!(content.contains("Contradicts"));
+        assert!(content.contains("contradicts"));
 
         // 创建新存储并导入
         let temp_dir2 = TempDir::new().unwrap();
