@@ -30,6 +30,12 @@ pub enum Commands {
     /// Commit changes to the repository
     Commit(CommitArgs),
 
+    /// Amend the last commit
+    Amend(AmendArgs),
+
+    /// Show commit history
+    Log(LogArgs),
+
     /// Graph database operations
     Graph(GraphArgs),
 
@@ -77,6 +83,23 @@ pub struct CommitArgs {
     /// Commit message
     #[arg(short, long)]
     pub message: String,
+}
+
+#[derive(Args)]
+pub struct AmendArgs {
+    /// New commit message
+    #[arg(short, long)]
+    pub message: String,
+}
+
+#[derive(Args)]
+pub struct LogArgs {
+    /// Number of commits to show
+    #[arg(short, long)]
+    pub limit: Option<usize>,
+    /// Show in oneline format
+    #[arg(short, long)]
+    pub oneline: bool,
 }
 
 /// Graph subcommands

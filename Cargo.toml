@@ -1,8 +1,8 @@
 [package]
 name = "memexia"
-version = "0.1.0"
+version = "0.2.7"
 edition = "2021"
-authors = ["Chen Xu <Woyerpa@outlook.com>"]
+authors = ["ChenXu233 <Woyerpa@outlook.com>"]
 description = "A personal knowledge graph system with infinite thought exploration"
 license = "GPL-3.0"
 repository = "https://github.com/ChenXu233/Memexia"
@@ -31,6 +31,7 @@ pulldown-cmark = "0.13.0"
 regex = "1.12.1"
 yaml-rust2 = "0.11.0"
 notify = "8.2.0"
+git2 = "0.20.3"  # libgit2 绑定，用于版本控制
 
 [dev-dependencies]
 tempfile = "3.10"

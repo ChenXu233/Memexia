@@ -11,7 +11,7 @@
 
 use crate::core::parser::parse_markdown;
 use crate::core::watch_config::WatchConfig;
-use crate::storage::{GraphStorage, Node, NodeType, Storage};
+use crate::storage::{Node, NodeType, Storage};
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;

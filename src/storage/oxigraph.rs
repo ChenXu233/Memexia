@@ -3,7 +3,7 @@
 //! 基于 Oxigraph 库实现 `GraphStorage` trait
 //! 使用 Oxigraph 0.5.3 的 Store API
 
-use super::{Edge, EdgeDirection, GraphStats, Node, NodeType, RelationType};
+use super::{Edge, EdgeDirection, GraphStats, Node, NodeType};
 use super::nquads::parse_relation_type;
 use crate::storage::graph::GraphStorage;
 use crate::storage::graph::QueryResult;
@@ -643,5 +643,30 @@ impl GraphStorage for OxigraphStorage {
         }
 
         Ok(None)
+    }
+
+    fn export_nquads(&self) -> Result<String> {
+        use std::fmt::Write;
+
+        let mut output = String::new();
+
+        for result in self.store.iter() {
+            match result {
+                Ok(quad) => {
+                    // 格式化: <subject> <predicate> <object> .
+                    let subject = quad.subject.to_string();
+                    let predicate = quad.predicate.to_string();
+                    let object = quad.object.to_string();
+
+                    // N-Quads 格式
+                    writeln!(output, "{} {} {} .", subject, predicate, object).unwrap();
+                }
+                Err(e) => {
+                    tracing::warn!("Failed to read quad: {:?}", e);
+                }
+            }
+        }
+
+        Ok(output)
     }
 }

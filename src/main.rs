@@ -21,6 +21,8 @@ fn main() -> anyhow::Result<()> {
         Commands::Add(args) => commands::add_files(args),
         Commands::Status(args) => commands::status(args),
         Commands::Commit(args) => commands::commit(args),
+        Commands::Amend(args) => commands::amend(args),
+        Commands::Log(args) => commands::log(args),
         Commands::Graph(args) => commands::graph_operations(args),
         Commands::Search(args) => commands::search(args),
         Commands::Sync(args) => commands::sync(args),

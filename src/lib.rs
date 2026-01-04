@@ -1,6 +1,7 @@
 pub mod cli;
 pub mod core;
 pub mod storage;
+pub mod vcs;
 
 pub fn init() -> anyhow::Result<()> {
     // Initialize global state if needed (e.g. logging)

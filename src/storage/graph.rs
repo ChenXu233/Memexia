@@ -267,6 +267,13 @@ pub trait GraphStorage: Send + Sync {
     ///
     /// 路径节点列表（如果存在）
     fn find_path(&self, source: &str, target: &str) -> Result<Option<Vec<String>>>;
+
+    /// 导出图为 N-Quads 格式
+    ///
+    /// # Returns
+    ///
+    /// N-Quads 格式的字符串
+    fn export_nquads(&self) -> Result<String>;
 }
 
 /// 边的方向
@@ -303,5 +310,91 @@ impl GraphStats {
             node_type_counts: Vec::new(),
             relation_counts: Vec::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_query_result_new() {
+        let result = QueryResult::new();
+        assert!(result.is_empty());
+        assert_eq!(result.len(), 0);
+    }
+
+    #[test]
+    fn test_query_result_add_binding() {
+        let mut result = QueryResult::new();
+        let binding: std::collections::HashMap<String, String> =
+            [("x".to_string(), "value".to_string())].into_iter().collect();
+        result.add_binding(binding.clone());
+        assert_eq!(result.len(), 1);
+        assert!(!result.is_empty());
+        assert_eq!(result.bindings[0], binding);
+    }
+
+    #[test]
+    fn test_query_result_multiple_bindings() {
+        let mut result = QueryResult::new();
+        for i in 0..5 {
+            let binding: std::collections::HashMap<String, String> =
+                [("id".to_string(), format!("{}", i))].into_iter().collect();
+            result.add_binding(binding);
+        }
+        assert_eq!(result.len(), 5);
+        assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn test_edge_direction_default() {
+        let direction = EdgeDirection::default();
+        assert_eq!(direction, EdgeDirection::Outgoing);
+    }
+
+    #[test]
+    fn test_edge_direction_variants() {
+        assert_eq!(EdgeDirection::Outgoing as u8, 0);
+        assert_eq!(EdgeDirection::Incoming as u8, 1);
+        assert_eq!(EdgeDirection::Both as u8, 2);
+    }
+
+    #[test]
+    fn test_edge_direction_clone() {
+        let original = EdgeDirection::Incoming;
+        let cloned = original.clone();
+        assert_eq!(cloned, original);
+    }
+
+    #[test]
+    fn test_edge_direction_copy() {
+        let direction = EdgeDirection::Both;
+        let copy = direction;
+        assert_eq!(copy, direction);
+    }
+
+    #[test]
+    fn test_graph_stats_new() {
+        let stats = GraphStats::new();
+        assert_eq!(stats.node_count, 0);
+        assert_eq!(stats.edge_count, 0);
+        assert!(stats.node_type_counts.is_empty());
+        assert!(stats.relation_counts.is_empty());
+    }
+
+    #[test]
+    fn test_graph_stats_clone() {
+        let stats = GraphStats::new();
+        let cloned = stats.clone();
+        assert_eq!(cloned.node_count, 0);
+        assert_eq!(cloned.edge_count, 0);
+    }
+
+    #[test]
+    fn test_graph_stats_default() {
+        let stats = GraphStats::default();
+        assert_eq!(stats.node_count, 0);
+        assert_eq!(stats.edge_count, 0);
     }
 }

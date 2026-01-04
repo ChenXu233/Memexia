@@ -29,8 +29,39 @@ pub fn status(_args: StatusArgs) -> Result<()> {
 
 pub fn commit(args: CommitArgs) -> Result<()> {
     info!("Committing with message: {}", args.message);
+    let mut repo = Repository::open(Path::new("."))?;
+    let commit_hash = repo.commit(&args.message)?;
+    println!("[{}] {}", &commit_hash[..7], args.message);
+    Ok(())
+}
+
+pub fn amend(args: AmendArgs) -> Result<()> {
+    info!("Amending last commit");
+    let mut repo = Repository::open(Path::new("."))?;
+    repo.amend(&args.message)?;
+    Ok(())
+}
+
+pub fn log(args: LogArgs) -> Result<()> {
     let repo = Repository::open(Path::new("."))?;
-    repo.commit(&args.message)?;
+    let limit = args.limit.unwrap_or(10);
+    let commits = repo.log(limit)?;
+
+    for commit in commits {
+        if args.oneline {
+            println!("[{}] {}", &commit.oid[..7], commit.message);
+        } else {
+            println!("=== {} ===", &commit.oid[..8]);
+            println!("Message: {}", commit.message);
+            println!("Author: {}", commit.author);
+            println!("Timestamp: {}", commit.timestamp);
+            if let Some(graph_hash) = commit.graph_hash {
+                println!("Graph snapshot: {}", &graph_hash[..12]);
+            }
+            println!();
+        }
+    }
+
     Ok(())
 }
 
